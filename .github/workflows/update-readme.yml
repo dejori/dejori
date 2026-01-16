@@ -1,0 +1,131 @@
+name: Update README Stats
+
+on:
+  schedule:
+    - cron: '0 8 * * *'  # Daily at 8 AM UTC
+  workflow_dispatch:  # Manual trigger
+
+jobs:
+  update-readme:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get latest coding language
+        id: github
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Get most recent push event with commits
+          EVENTS=$(curl -s -H "Authorization: token $GH_TOKEN" \
+            "https://api.github.com/users/${{ github.repository_owner }}/events?per_page=100")
+
+          # Find the most recent file extension from push events
+          LANG=$(echo "$EVENTS" | jq -r '
+            [.[] | select(.type == "PushEvent") | .payload.commits[]?.url] |
+            first' | xargs -I {} curl -s -H "Authorization: token $GH_TOKEN" {} 2>/dev/null |
+            jq -r '.files[]?.filename' |
+            grep -E '\.[a-zA-Z]+$' |
+            head -1 |
+            sed 's/.*\.//' |
+            tr '[:upper:]' '[:lower:]')
+
+          # Map extension to language name
+          case "$LANG" in
+            py) LANG_NAME="Python" ;;
+            js) LANG_NAME="JavaScript" ;;
+            ts) LANG_NAME="TypeScript" ;;
+            jsx) LANG_NAME="React" ;;
+            tsx) LANG_NAME="React TypeScript" ;;
+            go) LANG_NAME="Go" ;;
+            rs) LANG_NAME="Rust" ;;
+            rb) LANG_NAME="Ruby" ;;
+            java) LANG_NAME="Java" ;;
+            kt) LANG_NAME="Kotlin" ;;
+            swift) LANG_NAME="Swift" ;;
+            c) LANG_NAME="C" ;;
+            cpp|cc|cxx) LANG_NAME="C++" ;;
+            h) LANG_NAME="C/C++" ;;
+            cs) LANG_NAME="C#" ;;
+            php) LANG_NAME="PHP" ;;
+            sql) LANG_NAME="SQL" ;;
+            sh|bash) LANG_NAME="Bash" ;;
+            yml|yaml) LANG_NAME="YAML" ;;
+            json) LANG_NAME="JSON" ;;
+            md) LANG_NAME="Markdown" ;;
+            html) LANG_NAME="HTML" ;;
+            css) LANG_NAME="CSS" ;;
+            scss|sass) LANG_NAME="SCSS" ;;
+            *) LANG_NAME="$LANG" ;;
+          esac
+
+          if [ -n "$LANG_NAME" ] && [ "$LANG_NAME" != "null" ]; then
+            echo "language=$LANG_NAME" >> $GITHUB_OUTPUT
+          else
+            echo "language=code" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Get latest Mendeley paper
+        id: mendeley
+        env:
+          MENDELEY_CLIENT_ID: ${{ secrets.MENDELEY_CLIENT_ID }}
+          MENDELEY_CLIENT_SECRET: ${{ secrets.MENDELEY_CLIENT_SECRET }}
+          MENDELEY_REFRESH_TOKEN: ${{ secrets.MENDELEY_REFRESH_TOKEN }}
+        run: |
+          # Get access token using refresh token
+          TOKEN_RESPONSE=$(curl -s -X POST https://api.mendeley.com/oauth/token \
+            -d "grant_type=refresh_token" \
+            -d "refresh_token=$MENDELEY_REFRESH_TOKEN" \
+            -d "client_id=$MENDELEY_CLIENT_ID" \
+            -d "client_secret=$MENDELEY_CLIENT_SECRET")
+
+          ACCESS_TOKEN=$(echo $TOKEN_RESPONSE | jq -r '.access_token')
+
+          if [ "$ACCESS_TOKEN" == "null" ] || [ -z "$ACCESS_TOKEN" ]; then
+            echo "Failed to get access token"
+            echo "paper_text=" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Get most recently added document
+          PAPER=$(curl -s "https://api.mendeley.com/documents?sort=created&order=desc&limit=1" \
+            -H "Authorization: Bearer $ACCESS_TOKEN" \
+            -H "Accept: application/vnd.mendeley-document.1+json")
+
+          TITLE=$(echo $PAPER | jq -r '.[0].title')
+          AUTHORS=$(echo $PAPER | jq -r '.[0].authors | map(.last_name) | join(", ")')
+          YEAR=$(echo $PAPER | jq -r '.[0].year // empty')
+
+          if [ "$TITLE" != "null" ] && [ -n "$TITLE" ]; then
+            if [ -n "$YEAR" ] && [ "$YEAR" != "null" ]; then
+              PAPER_TEXT="*${TITLE}* by ${AUTHORS} (${YEAR})"
+            else
+              PAPER_TEXT="*${TITLE}* by ${AUTHORS}"
+            fi
+            echo "paper_text=$PAPER_TEXT" >> $GITHUB_OUTPUT
+          else
+            echo "paper_text=" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Update README
+        run: |
+          LANG="${{ steps.github.outputs.language }}"
+          PAPER="${{ steps.mendeley.outputs.paper_text }}"
+
+          # Update language
+          if [ -n "$LANG" ]; then
+            sed -i "s|<!-- LANG:START -->.*<!-- LANG:END -->|<!-- LANG:START -->${LANG}<!-- LANG:END -->|" README.md
+          fi
+
+          # Update paper
+          if [ -n "$PAPER" ]; then
+            sed -i "s|<!-- PAPER:START -->.*<!-- PAPER:END -->|<!-- PAPER:START -->${PAPER}<!-- PAPER:END -->|" README.md
+          fi
+
+      - name: Commit changes
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git diff --quiet README.md || (git add README.md && git commit -m "Update README stats")
+          git push
