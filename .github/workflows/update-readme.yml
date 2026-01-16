@@ -50,9 +50,11 @@ jobs:
           LEGEND=""
           CHARS=("█" "░" "▒")
           i=0
+          TOP3_BYTES=0
 
           while read -r bytes lang; do
             if [ -n "$bytes" ] && [ "$TOTAL_BYTES" -gt 0 ]; then
+              TOP3_BYTES=$((TOP3_BYTES + bytes))
               pct=$((bytes * 100 / TOTAL_BYTES))
               chars=$((pct * BAR_WIDTH / 100))
               [ $chars -eq 0 ] && [ $pct -gt 0 ] && chars=1
@@ -69,10 +71,24 @@ jobs:
             fi
           done <<< "$SORTED"
 
+          # Calculate and add "Other" if there's remaining percentage
+          OTHER_BYTES=$((TOTAL_BYTES - TOP3_BYTES))
+          if [ "$OTHER_BYTES" -gt 0 ] && [ "$TOTAL_BYTES" -gt 0 ]; then
+            OTHER_PCT=$((OTHER_BYTES * 100 / TOTAL_BYTES))
+            if [ "$OTHER_PCT" -gt 0 ]; then
+              chars=$((OTHER_PCT * BAR_WIDTH / 100))
+              [ $chars -eq 0 ] && chars=1
+              for ((j=0; j<chars; j++)); do
+                BAR="${BAR}·"
+              done
+              LEGEND="${LEGEND} | Other ${OTHER_PCT}%"
+            fi
+          fi
+
           # Fill remaining bar space if needed
           current_len=${#BAR}
           while [ $current_len -lt $BAR_WIDTH ]; do
-            BAR="${BAR}·"
+            BAR="${BAR} "
             current_len=$((current_len + 1))
           done
 
@@ -144,14 +160,14 @@ jobs:
           STATS="${{ steps.github.outputs.language_stats }}"
           PAPER="${{ steps.mendeley.outputs.paper_text }}"
 
-          # Update language stats
+          # Update language stats (use # as delimiter to avoid | conflicts)
           if [ -n "$STATS" ]; then
-            sed -i "s|<!-- LANG:START -->.*<!-- LANG:END -->|<!-- LANG:START -->${STATS}<!-- LANG:END -->|" README.md
+            sed -i "s#<!-- LANG:START -->.*<!-- LANG:END -->#<!-- LANG:START -->${STATS}<!-- LANG:END -->#" README.md
           fi
 
           # Update paper
           if [ -n "$PAPER" ]; then
-            sed -i "s|<!-- PAPER:START -->.*<!-- PAPER:END -->|<!-- PAPER:START -->${PAPER}<!-- PAPER:END -->|" README.md
+            sed -i "s#<!-- PAPER:START -->.*<!-- PAPER:END -->#<!-- PAPER:START -->${PAPER}<!-- PAPER:END -->#" README.md
           fi
 
       - name: Commit changes
