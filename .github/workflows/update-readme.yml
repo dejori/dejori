@@ -15,64 +15,69 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Get latest coding language
+      - name: Get coding language stats
         id: github
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
-          # Get most recent push event
-          EVENT=$(curl -s -H "Authorization: token $GH_TOKEN" \
-            "https://api.github.com/users/${{ github.repository_owner }}/events?per_page=100" | \
-            jq -r '[.[] | select(.type == "PushEvent")][0]')
+          # Get all repos for user
+          REPOS=$(curl -s -H "Authorization: token $GH_TOKEN" \
+            "https://api.github.com/user/repos?per_page=100&type=owner")
 
-          REPO=$(echo "$EVENT" | jq -r '.repo.name')
-          HEAD=$(echo "$EVENT" | jq -r '.payload.head')
+          # Aggregate language bytes across all repos
+          declare -A LANG_BYTES
+          TOTAL_BYTES=0
 
-          # Get the commit details
-          COMMIT=$(curl -s -H "Authorization: token $GH_TOKEN" \
-            "https://api.github.com/repos/$REPO/commits/$HEAD")
+          for repo in $(echo "$REPOS" | jq -r '.[].full_name'); do
+            LANGS=$(curl -s -H "Authorization: token $GH_TOKEN" \
+              "https://api.github.com/repos/$repo/languages")
 
-          # Get file extension from first changed file
-          LANG=$(echo "$COMMIT" | jq -r '.files[]?.filename' | \
-            grep -E '\.[a-zA-Z]+$' | \
-            head -1 | \
-            sed 's/.*\.//' | \
-            tr '[:upper:]' '[:lower:]')
+            for lang in $(echo "$LANGS" | jq -r 'keys[]'); do
+              bytes=$(echo "$LANGS" | jq -r ".[\"$lang\"]")
+              LANG_BYTES[$lang]=$((${LANG_BYTES[$lang]:-0} + bytes))
+              TOTAL_BYTES=$((TOTAL_BYTES + bytes))
+            done
+          done
 
-          # Map extension to language name
-          case "$LANG" in
-            py) LANG_NAME="Python" ;;
-            js) LANG_NAME="JavaScript" ;;
-            ts) LANG_NAME="TypeScript" ;;
-            jsx) LANG_NAME="React" ;;
-            tsx) LANG_NAME="React TypeScript" ;;
-            go) LANG_NAME="Go" ;;
-            rs) LANG_NAME="Rust" ;;
-            rb) LANG_NAME="Ruby" ;;
-            java) LANG_NAME="Java" ;;
-            kt) LANG_NAME="Kotlin" ;;
-            swift) LANG_NAME="Swift" ;;
-            c) LANG_NAME="C" ;;
-            cpp|cc|cxx) LANG_NAME="C++" ;;
-            h) LANG_NAME="C/C++" ;;
-            cs) LANG_NAME="C#" ;;
-            php) LANG_NAME="PHP" ;;
-            sql) LANG_NAME="SQL" ;;
-            sh|bash) LANG_NAME="Bash" ;;
-            yml|yaml) LANG_NAME="YAML" ;;
-            json) LANG_NAME="JSON" ;;
-            md) LANG_NAME="Markdown" ;;
-            html) LANG_NAME="HTML" ;;
-            css) LANG_NAME="CSS" ;;
-            scss|sass) LANG_NAME="SCSS" ;;
-            *) LANG_NAME="$LANG" ;;
-          esac
+          # Sort languages by bytes and get top 3
+          SORTED=$(for lang in "${!LANG_BYTES[@]}"; do
+            echo "${LANG_BYTES[$lang]} $lang"
+          done | sort -rn | head -3)
 
-          if [ -n "$LANG_NAME" ] && [ "$LANG_NAME" != "null" ]; then
-            echo "language=$LANG_NAME" >> $GITHUB_OUTPUT
-          else
-            echo "language=code" >> $GITHUB_OUTPUT
-          fi
+          # Calculate percentages and build bar chart
+          BAR_WIDTH=20
+          BAR=""
+          LEGEND=""
+          CHARS=("█" "░" "▒")
+          i=0
+
+          while read -r bytes lang; do
+            if [ -n "$bytes" ] && [ "$TOTAL_BYTES" -gt 0 ]; then
+              pct=$((bytes * 100 / TOTAL_BYTES))
+              chars=$((pct * BAR_WIDTH / 100))
+              [ $chars -eq 0 ] && [ $pct -gt 0 ] && chars=1
+
+              for ((j=0; j<chars; j++)); do
+                BAR="${BAR}${CHARS[$i]}"
+              done
+
+              if [ -n "$LEGEND" ]; then
+                LEGEND="${LEGEND} | "
+              fi
+              LEGEND="${LEGEND}${lang} ${pct}%"
+              i=$((i + 1))
+            fi
+          done <<< "$SORTED"
+
+          # Fill remaining bar space if needed
+          current_len=${#BAR}
+          while [ $current_len -lt $BAR_WIDTH ]; do
+            BAR="${BAR}·"
+            current_len=$((current_len + 1))
+          done
+
+          STATS="${BAR} ${LEGEND}"
+          echo "language_stats=$STATS" >> $GITHUB_OUTPUT
 
       - name: Get latest Mendeley paper
         id: mendeley
@@ -136,12 +141,12 @@ jobs:
 
       - name: Update README
         run: |
-          LANG="${{ steps.github.outputs.language }}"
+          STATS="${{ steps.github.outputs.language_stats }}"
           PAPER="${{ steps.mendeley.outputs.paper_text }}"
 
-          # Update language
-          if [ -n "$LANG" ]; then
-            sed -i "s|<!-- LANG:START -->.*<!-- LANG:END -->|<!-- LANG:START -->${LANG}<!-- LANG:END -->|" README.md
+          # Update language stats
+          if [ -n "$STATS" ]; then
+            sed -i "s|<!-- LANG:START -->.*<!-- LANG:END -->|<!-- LANG:START -->${STATS}<!-- LANG:END -->|" README.md
           fi
 
           # Update paper
