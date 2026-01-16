@@ -104,6 +104,18 @@ jobs:
           TITLE=$(echo $PAPER | jq -r '.[0].title')
           AUTHORS=$(echo $PAPER | jq -r '.[0].authors | map(.last_name) | join(", ")')
           YEAR=$(echo $PAPER | jq -r '.[0].year // empty')
+          URL=$(echo $PAPER | jq -r '.[0].websites[0] // empty')
+          DOI=$(echo $PAPER | jq -r '.[0].identifiers.doi // empty')
+          ARXIV=$(echo $PAPER | jq -r '.[0].identifiers.arxiv // empty')
+
+          # Pick best URL: website > DOI > arXiv
+          if [ -z "$URL" ] || [ "$URL" == "null" ]; then
+            if [ -n "$DOI" ] && [ "$DOI" != "null" ]; then
+              URL="https://doi.org/$DOI"
+            elif [ -n "$ARXIV" ] && [ "$ARXIV" != "null" ]; then
+              URL="https://arxiv.org/abs/$ARXIV"
+            fi
+          fi
 
           if [ "$TITLE" != "null" ] && [ -n "$TITLE" ]; then
             if [ -n "$YEAR" ] && [ "$YEAR" != "null" ]; then
@@ -111,6 +123,12 @@ jobs:
             else
               PAPER_TEXT="*${TITLE}* by ${AUTHORS}"
             fi
+
+            # Add link at end if available
+            if [ -n "$URL" ] && [ "$URL" != "null" ]; then
+              PAPER_TEXT="${PAPER_TEXT} [[ref]](${URL})"
+            fi
+
             echo "paper_text=$PAPER_TEXT" >> $GITHUB_OUTPUT
           else
             echo "paper_text=" >> $GITHUB_OUTPUT
