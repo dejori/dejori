@@ -18,9 +18,9 @@ jobs:
       - name: Get latest coding language
         id: github
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
-          # Get most recent push event with commits
+          # Get most recent push event with commits (using PAT for private repo access)
           EVENTS=$(curl -s -H "Authorization: token $GH_TOKEN" \
             "https://api.github.com/users/${{ github.repository_owner }}/events?per_page=100")
 
