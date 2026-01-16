@@ -1,0 +1,72 @@
+name: Update Mendeley Reading
+
+on:
+  schedule:
+    - cron: '0 8 * * *'  # Daily at 8 AM UTC
+  workflow_dispatch:  # Manual trigger
+
+jobs:
+  update-readme:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Get latest Mendeley paper
+        id: mendeley
+        env:
+          MENDELEY_CLIENT_ID: ${{ secrets.MENDELEY_CLIENT_ID }}
+          MENDELEY_CLIENT_SECRET: ${{ secrets.MENDELEY_CLIENT_SECRET }}
+          MENDELEY_REFRESH_TOKEN: ${{ secrets.MENDELEY_REFRESH_TOKEN }}
+        run: |
+          # Get access token using refresh token
+          TOKEN_RESPONSE=$(curl -s -X POST https://api.mendeley.com/oauth/token \
+            -d "grant_type=refresh_token" \
+            -d "refresh_token=$MENDELEY_REFRESH_TOKEN" \
+            -d "client_id=$MENDELEY_CLIENT_ID" \
+            -d "client_secret=$MENDELEY_CLIENT_SECRET")
+
+          ACCESS_TOKEN=$(echo $TOKEN_RESPONSE | jq -r '.access_token')
+
+          if [ "$ACCESS_TOKEN" == "null" ] || [ -z "$ACCESS_TOKEN" ]; then
+            echo "Failed to get access token"
+            exit 1
+          fi
+
+          # Get most recently added document
+          PAPER=$(curl -s "https://api.mendeley.com/documents?sort=created&order=desc&limit=1" \
+            -H "Authorization: Bearer $ACCESS_TOKEN" \
+            -H "Accept: application/vnd.mendeley-document.1+json")
+
+          TITLE=$(echo $PAPER | jq -r '.[0].title')
+          AUTHORS=$(echo $PAPER | jq -r '.[0].authors | map(.last_name) | join(", ")')
+          YEAR=$(echo $PAPER | jq -r '.[0].year // empty')
+
+          if [ "$TITLE" != "null" ] && [ -n "$TITLE" ]; then
+            if [ -n "$YEAR" ] && [ "$YEAR" != "null" ]; then
+              PAPER_TEXT="*${TITLE}* by ${AUTHORS} (${YEAR})"
+            else
+              PAPER_TEXT="*${TITLE}* by ${AUTHORS}"
+            fi
+            echo "paper_text=$PAPER_TEXT" >> $GITHUB_OUTPUT
+          else
+            echo "No paper found"
+            exit 1
+          fi
+
+      - name: Update README
+        run: |
+          PAPER="${{ steps.mendeley.outputs.paper_text }}"
+          sed -i "s|<!-- MENDELEY-LIST:START -->.*<!-- MENDELEY-LIST:END -->|<!-- MENDELEY-LIST:START -->${PAPER}<!-- MENDELEY-LIST:END -->|" README.md
+
+      - name: Commit changes
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git diff --quiet README.md || (git add README.md && git commit -m "Update latest Mendeley paper")
+          git push
