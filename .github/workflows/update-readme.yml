@@ -20,18 +20,23 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
-          # Get most recent push event with commits (using PAT for private repo access)
-          EVENTS=$(curl -s -H "Authorization: token $GH_TOKEN" \
-            "https://api.github.com/users/${{ github.repository_owner }}/events?per_page=100")
+          # Get most recent push event
+          EVENT=$(curl -s -H "Authorization: token $GH_TOKEN" \
+            "https://api.github.com/users/${{ github.repository_owner }}/events?per_page=100" | \
+            jq -r '[.[] | select(.type == "PushEvent")][0]')
 
-          # Find the most recent file extension from push events
-          LANG=$(echo "$EVENTS" | jq -r '
-            [.[] | select(.type == "PushEvent") | .payload.commits[]?.url] |
-            first' | xargs -I {} curl -s -H "Authorization: token $GH_TOKEN" {} 2>/dev/null |
-            jq -r '.files[]?.filename' |
-            grep -E '\.[a-zA-Z]+$' |
-            head -1 |
-            sed 's/.*\.//' |
+          REPO=$(echo "$EVENT" | jq -r '.repo.name')
+          HEAD=$(echo "$EVENT" | jq -r '.payload.head')
+
+          # Get the commit details
+          COMMIT=$(curl -s -H "Authorization: token $GH_TOKEN" \
+            "https://api.github.com/repos/$REPO/commits/$HEAD")
+
+          # Get file extension from first changed file
+          LANG=$(echo "$COMMIT" | jq -r '.files[]?.filename' | \
+            grep -E '\.[a-zA-Z]+$' | \
+            head -1 | \
+            sed 's/.*\.//' | \
             tr '[:upper:]' '[:lower:]')
 
           # Map extension to language name
