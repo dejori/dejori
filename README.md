@@ -5,6 +5,6 @@ Hi, I'm Mathäus (pronounced mah-TAY-oos) and I am currently leading a team of d
 
 At work I balance my time between strategic planning, making sure everyone on my team has what they need to succeed in their goals, and hands-on engineering. Working in machine learning means continuous human learning. It's sometimes a curse, because everything is constantly changing underneath you, but more so a gift, because it's an exciting time to be in this field. 
 - Coding stats: <!-- LANG:START -->████████░░░░░░▒▒·    JavaScript 44% | Python 33% | HTML 13% | Other 8%<!-- LANG:END -->
-- Last paper read: <!-- PAPER:START -->*The Illusion of Readiness in Health AI* by Gu, Fu, Liu, Maria, Valanarasu, Codella, Tan, Liu, Jin, Zhang, Wang, Wang, Song, Qin, Usuyama, Wong, Cheng, Lee, Sanapathi, Hilado, Naumann, Alvarez-Valle, Bian, Wei, Malik, Zhou, Gao, Horvitz, Lungren, Burger, Topol, Poon, Vozila (2025) [[ref]](https://arxiv.org/abs/2509.18234v3)<!-- PAPER:END --> ([my paper-trail](https://github.com/dejori/my-paper-trail))
+- Last paper read: <!-- PAPER:START -->*Nature Medicine nature medicine Generative AI-enabled clinical decision support system in primary care: a pragmatic, cluster-randomized trial* by Agweyu, Mwaniki, Menon, Korom, Isaaka, Wanyama, Gill, Kiptinness, Adan, Emmanuel-Fabula, Riley, Archer, Denniston, Liu, Mateen [[ref]](https://doi.org/10.1038/s41591-026-04503-6)<!-- PAPER:END --> ([my paper-trail](https://github.com/dejori/my-paper-trail))
 
 Outside of work, I love reading, people watching and escaping the city for the outdoors.
