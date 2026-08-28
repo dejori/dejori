@@ -162,12 +162,14 @@ jobs:
 
           # Update language stats (use # as delimiter to avoid | conflicts)
           if [ -n "$STATS" ]; then
-            sed -i "s#<!-- LANG:START -->.*<!-- LANG:END -->#<!-- LANG:START -->${STATS}<!-- LANG:END -->#" README.md
+            SAFE_STATS=$(printf '%s' "$STATS" | sed 's#[&\\]#\\&#g')
+            sed -i "s#<!-- LANG:START -->.*<!-- LANG:END -->#<!-- LANG:START -->${SAFE_STATS}<!-- LANG:END -->#" README.md
           fi
 
           # Update paper
           if [ -n "$PAPER" ]; then
-            sed -i "s#<!-- PAPER:START -->.*<!-- PAPER:END -->#<!-- PAPER:START -->${PAPER}<!-- PAPER:END -->#" README.md
+            SAFE_PAPER=$(printf '%s' "$PAPER" | sed 's#[&\\]#\\&#g')
+            sed -i "s#<!-- PAPER:START -->.*<!-- PAPER:END -->#<!-- PAPER:START -->${SAFE_PAPER}<!-- PAPER:END -->#" README.md
           fi
 
       - name: Commit changes
