@@ -95,70 +95,63 @@ jobs:
           STATS="${BAR} ${LEGEND}"
           echo "language_stats=$STATS" >> $GITHUB_OUTPUT
 
-      - name: Get latest Mendeley paper
-        id: mendeley
+      - name: Get latest Zotero paper
+        id: zotero
         env:
-          MENDELEY_CLIENT_ID: ${{ secrets.MENDELEY_CLIENT_ID }}
-          MENDELEY_CLIENT_SECRET: ${{ secrets.MENDELEY_CLIENT_SECRET }}
-          MENDELEY_REFRESH_TOKEN: ${{ secrets.MENDELEY_REFRESH_TOKEN }}
+          ZOTERO_USER_ID: ${{ secrets.ZOTERO_USER_ID }}
+          ZOTERO_API_KEY: ${{ secrets.ZOTERO_API_KEY }}
         run: |
-          # Get access token using refresh token
-          TOKEN_RESPONSE=$(curl -s -X POST https://api.mendeley.com/oauth/token \
-            -d "grant_type=refresh_token" \
-            -d "refresh_token=$MENDELEY_REFRESH_TOKEN" \
-            -d "client_id=$MENDELEY_CLIENT_ID" \
-            -d "client_secret=$MENDELEY_CLIENT_SECRET")
+          # Get most recently added items (exclude attachments)
+          ITEMS=$(curl -s \
+            "https://api.zotero.org/users/$ZOTERO_USER_ID/items?sort=dateAdded&direction=desc&limit=5&itemType=-attachment&format=json" \
+            -H "Zotero-API-Key: $ZOTERO_API_KEY")
 
-          ACCESS_TOKEN=$(echo $TOKEN_RESPONSE | jq -r '.access_token')
+          COUNT=$(echo "$ITEMS" | jq 'length')
+          PAPER_TEXT=""
 
-          if [ "$ACCESS_TOKEN" == "null" ] || [ -z "$ACCESS_TOKEN" ]; then
-            echo "Failed to get access token"
-            echo "paper_text=" >> $GITHUB_OUTPUT
-            exit 0
-          fi
+          for idx in $(seq 0 $((COUNT - 1))); do
+            TITLE=$(echo "$ITEMS" | jq -r ".[$idx].data.title // empty")
 
-          # Get most recently added document
-          PAPER=$(curl -s "https://api.mendeley.com/documents?sort=created&order=desc&limit=1" \
-            -H "Authorization: Bearer $ACCESS_TOKEN" \
-            -H "Accept: application/vnd.mendeley-document.1+json")
-
-          TITLE=$(echo $PAPER | jq -r '.[0].title')
-          AUTHORS=$(echo $PAPER | jq -r '.[0].authors | map(.last_name) | join(", ")')
-          YEAR=$(echo $PAPER | jq -r '.[0].year // empty')
-          URL=$(echo $PAPER | jq -r '.[0].websites[0] // empty')
-          DOI=$(echo $PAPER | jq -r '.[0].identifiers.doi // empty')
-          ARXIV=$(echo $PAPER | jq -r '.[0].identifiers.arxiv // empty')
-
-          # Pick best URL: website > DOI > arXiv
-          if [ -z "$URL" ] || [ "$URL" == "null" ]; then
-            if [ -n "$DOI" ] && [ "$DOI" != "null" ]; then
-              URL="https://doi.org/$DOI"
-            elif [ -n "$ARXIV" ] && [ "$ARXIV" != "null" ]; then
-              URL="https://arxiv.org/abs/$ARXIV"
+            # Skip missing or corrupted titles (> 300 chars)
+            if [ -z "$TITLE" ] || [ ${#TITLE} -gt 300 ]; then
+              continue
             fi
-          fi
 
-          if [ "$TITLE" != "null" ] && [ -n "$TITLE" ]; then
-            if [ -n "$YEAR" ] && [ "$YEAR" != "null" ]; then
+            AUTHORS=$(echo "$ITEMS" | jq -r ".[$idx].data.creators | map(select(.creatorType==\"author\") | .lastName) | join(\", \")")
+            YEAR=$(echo "$ITEMS" | jq -r ".[$idx].data.date // empty" | grep -oP '^\d{4}' || true)
+            URL=$(echo "$ITEMS" | jq -r ".[$idx].data.url // empty")
+            DOI=$(echo "$ITEMS" | jq -r ".[$idx].data.DOI // empty")
+            EXTRA=$(echo "$ITEMS" | jq -r ".[$idx].data.extra // empty")
+            ARXIV=$(echo "$EXTRA" | grep -oP 'arXiv:\K\S+' || true)
+
+            # Pick best URL: url > DOI > arXiv
+            if [ -z "$URL" ] || [ "$URL" == "null" ]; then
+              if [ -n "$DOI" ] && [ "$DOI" != "null" ]; then
+                URL="https://doi.org/$DOI"
+              elif [ -n "$ARXIV" ]; then
+                URL="https://arxiv.org/abs/$ARXIV"
+              fi
+            fi
+
+            if [ -n "$YEAR" ]; then
               PAPER_TEXT="*${TITLE}* by ${AUTHORS} (${YEAR})"
             else
               PAPER_TEXT="*${TITLE}* by ${AUTHORS}"
             fi
 
-            # Add link at end if available
             if [ -n "$URL" ] && [ "$URL" != "null" ]; then
               PAPER_TEXT="${PAPER_TEXT} [[ref]](${URL})"
             fi
 
-            echo "paper_text=$PAPER_TEXT" >> $GITHUB_OUTPUT
-          else
-            echo "paper_text=" >> $GITHUB_OUTPUT
-          fi
+            break
+          done
+
+          echo "paper_text=$PAPER_TEXT" >> $GITHUB_OUTPUT
 
       - name: Update README
         run: |
           STATS="${{ steps.github.outputs.language_stats }}"
-          PAPER="${{ steps.mendeley.outputs.paper_text }}"
+          PAPER="${{ steps.zotero.outputs.paper_text }}"
 
           # Update language stats (use # as delimiter to avoid | conflicts)
           if [ -n "$STATS" ]; then
