@@ -5,6 +5,6 @@ Hi, I'm Mathäus (pronounced mah-TAY-oos) and I am currently leading a team of d
 
 At work I balance my time between strategic planning, making sure everyone on my team has what they need to succeed in their goals, and hands-on engineering. Working in machine learning means continuous human learning. It's sometimes a curse, because everything is constantly changing underneath you, but more so a gift, because it's an exciting time to be in this field. 
 - Coding stats: <!-- LANG:START -->████████░░░░░░▒▒·    JavaScript 44% | Python 33% | HTML 13% | Other 8%<!-- LANG:END -->
-- Last paper read: <!-- PAPER:START -->*Double Blind Evals: Resolving the Dual Confidentiality Dilemma in AI Safety Auditing* by Trask, Messing, Pahwa, Maham, Kolga, Frantz, Tash, Thomas, McGregor, Balston, Paskov, Brundage, Vij, Hillenbrand, Karargyris, Acosta, Fenster, Eilish, Elasmar, Khan, Gabriel, Werneck, Strahm, McDonough, Falcon, Lum, Isaac<!-- PAPER:END --> ([my paper-trail](https://github.com/dejori/my-paper-trail))
+- Last paper read: <!-- PAPER:START -->*From Model Scaling to System Scaling: Scaling the Harness in Agentic AI* by Gu (2026) [[ref]](http://arxiv.org/abs/2605.26112)<!-- PAPER:END --> ([my paper-trail](https://github.com/dejori/my-paper-trail))
 
 Outside of work, I love reading, people watching and escaping the city for the outdoors.
